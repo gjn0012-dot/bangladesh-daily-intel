@@ -5,5 +5,6 @@
   "failedSources": [],
   "aiStatus": "未配置API密钥",
   "aiModel": "",
+  "translationStatus": "等待本地翻译模型运行",
   "stories": []
 }
