@@ -43,6 +43,7 @@ type Story = {
 
 type NewsPayload = {
   generatedAt: string;
+  maxAgeDays?: number;
   sourceCount: number;
   successfulSources: number;
   failedSources: string[];
@@ -449,7 +450,8 @@ export default function Home() {
 
             <section className="side-card source-card">
               <div className="side-title"><span>消息源状态</span><small>{news.successfulSources}/{news.sourceCount || 8} 正常</small></div>
-              <div className="source-stat"><span><i className="green" />自动更新</span><b>每3小时</b></div>
+              <div className="source-stat"><span><i className="green" />自动更新</span><b>每小时</b></div>
+              <div className="source-stat"><span><i className="blue" />新闻范围</span><b>近{news.maxAgeDays || 30}天</b></div>
               <div className="source-stat"><span><i className="green" />中文新闻标题</span><b>{news.translationStatus?.includes("翻译") || stories.some((item) => item.machineTranslated) ? "本地模型" : "处理中"}</b></div>
               <div className="source-stat"><span><i className="green" />中文智能摘要</span><b>{news.aiStatus === "AI中文摘要已启用" || news.aiStatus === "无需新增摘要" ? "已启用" : "待配置"}</b></div>
               <div className="source-stat"><span><i className="blue" />主流媒体/RSS</span><b>{news.successfulSources || 0}</b></div>
