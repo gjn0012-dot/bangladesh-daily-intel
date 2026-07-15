@@ -165,6 +165,7 @@ const payload = {
   failedSources,
   aiStatus: enrichment.aiStatus,
   aiModel: enrichment.aiModel,
+  translationStatus: enrichment.translationStatus,
   stories: enrichment.stories,
 };
 
