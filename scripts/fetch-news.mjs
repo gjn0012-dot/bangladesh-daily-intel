@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { enrichStories } from "./enrich-news.mjs";
 
 const googleFeed = (query) =>
   `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en&gl=BD&ceid=BD:en`;
@@ -86,11 +87,6 @@ function similarity(a, b) {
   return intersection / Math.min(left.size, right.size);
 }
 
-function isOfficial(source, url) {
-  return /government|cabinet|ministry|bangladesh bank|power division|bppa|bss/i.test(source) ||
-    /\.gov\.bd(?:\/|$)|bb\.org\.bd/i.test(url);
-}
-
 function tagsFor(text, category) {
   const candidates = [
     ["政府政策", /government|policy|cabinet|minister/i], ["项目机会", /project|tender|procurement|contract/i],
@@ -119,15 +115,14 @@ async function fetchFeed(feed) {
     const itemSource = plainText(tag(block, "source"));
     const source = itemSource || feed.name;
     const category = categoryFor(`${title} ${description}`);
-    const official = isOfficial(source, url);
     const highPriority = /tender|contract|policy|cabinet|power|energy|rail|port|bank|budget|investment/i.test(title);
     return {
       id: hash(url || `${source}:${title}`), category, title,
       summary: description && description !== title ? description.slice(0, 320) : `来自${source}公开信息流的最新报道，请打开原始页面查看全文。`,
       impact: impactByCategory[category], source, sourceCount: 1,
-      confidence: official ? "官方确认" : "单源报道",
+      confidence: "有待核实",
       level: highPriority ? "重点" : "参考", time: timeAgo(publishedAt), location: "孟加拉国",
-      stage: official ? "正式发布" : "媒体报道", tags: tagsFor(`${title} ${description}`, category),
+      stage: "媒体报道", tags: tagsFor(`${title} ${description}`, category),
       url, publishedAt: new Date(publishedAt).toISOString(), sourceLinks: [{ name: source, url }],
     };
   }).filter((item) => item.title && /^https?:\/\//.test(item.url));
@@ -157,18 +152,22 @@ const results = await Promise.allSettled(feeds.map(fetchFeed));
 const failedSources = results.flatMap((result, index) => result.status === "rejected" ? [feeds[index].name] : []);
 const rawStories = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
 const uniqueStories = [...new Map(rawStories.map((item) => [item.url.replace(/[#?]utm_.*/, ""), item])).values()];
-const stories = cluster(uniqueStories).slice(0, 60);
+const clusteredStories = cluster(uniqueStories).slice(0, 60);
 
-if (!stories.length) throw new Error(`All feeds failed: ${failedSources.join(", ")}`);
+if (!clusteredStories.length) throw new Error(`All feeds failed: ${failedSources.join(", ")}`);
+
+const enrichment = await enrichStories(clusteredStories);
 
 const payload = {
   generatedAt: new Date().toISOString(),
   sourceCount: feeds.length,
   successfulSources: feeds.length - failedSources.length,
   failedSources,
-  stories,
+  aiStatus: enrichment.aiStatus,
+  aiModel: enrichment.aiModel,
+  stories: enrichment.stories,
 };
 
 await mkdir("public/data", { recursive: true });
 await writeFile("public/data/news.json", `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-console.log(`Generated ${stories.length} stories from ${payload.successfulSources}/${feeds.length} feeds.`);
+console.log(`Generated ${enrichment.stories.length} stories from ${payload.successfulSources}/${feeds.length} feeds. ${enrichment.aiStatus}`);
