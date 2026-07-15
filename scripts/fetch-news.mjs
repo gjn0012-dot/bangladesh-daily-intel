@@ -9,6 +9,11 @@ const futureTolerance = Date.now() + 36 * 3600000;
 const googleFeed = (query) =>
   `https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:${MAX_AGE_DAYS}d`)}&hl=en&gl=BD&ceid=BD:en`;
 
+const webSearchFeed = (query) => {
+  const after = new Date(cutoffTime).toISOString().slice(0, 10);
+  return `https://www.bing.com/search?format=rss&q=${encodeURIComponent(`${query} after:${after}`)}`;
+};
+
 const feeds = [
   { name: "The Daily Star", url: "https://www.thedailystar.net/frontpage/rss.xml" },
   { name: "bdnews24.com", url: "https://bdnews24.com/?widgetName=rssfeed&widgetId=1150&getXmlFeed=true" },
@@ -27,7 +32,11 @@ const feeds = [
   { name: "Google News · 通讯社与主流媒体", url: googleFeed("Bangladesh (site:bssnews.net OR site:unb.com.bd OR site:dhakatribune.com)") },
   { name: "Google News · 商业媒体", url: googleFeed("Bangladesh (site:tbsnews.net OR site:thefinancialexpress.com.bd OR site:businesspostbd.com)") },
   { name: "Google News · 政府采购与审批", url: googleFeed("Bangladesh government tender procurement ECNEC BPPA Power Division Bangladesh Bank") },
+  { name: "政府重要会议", url: googleFeed("Bangladesh (cabinet meeting OR ECNEC meeting OR ministerial meeting OR Planning Commission meeting)"), category: "政府会议" },
+  { name: "BSS · 政府会议", url: googleFeed("site:bssnews.net Bangladesh (cabinet OR ECNEC OR minister meeting OR secretary meeting)"), category: "政府会议" },
   { name: "Google News · 国际发展机构", url: googleFeed("Bangladesh (ADB OR World Bank OR AIIB OR IFC OR IMF) project loan investment") },
+  { name: "孟加拉内阁司", url: "https://cabinet.gov.bd/views/latest-news", kind: "governmentHtml", category: "政府会议", official: true },
+  { name: "孟加拉规划委员会", url: "https://planningcommission.gov.bd/views/latest-news", kind: "governmentHtml", category: "政府会议", official: true },
   { name: "孟加拉电力司", url: "https://powerdivision.gov.bd/pages/notices", kind: "governmentHtml", category: "电力能源", official: true },
   { name: "孟加拉铁路部", url: "https://mor.gov.bd/views/latest-news", kind: "governmentHtml", category: "交通基建", official: true },
   { name: "孟加拉铁路局", url: "https://railway.gov.bd/views/latest-news", kind: "governmentHtml", category: "交通基建", official: true },
@@ -36,10 +45,15 @@ const feeds = [
   { name: "孟加拉航运部", url: "https://mos.gov.bd/pages/news", kind: "governmentHtml", category: "港口船舶", official: true },
   { name: "孟加拉公路运输与桥梁司", url: "https://rthd.gov.bd/pages/news", kind: "governmentHtml", category: "交通基建", official: true },
   { name: "孟加拉公共采购管理局（BPPA）", url: "https://bppa.gov.bd/media-communication/news.html", kind: "governmentHtml", category: "宏观金融", official: true },
+  { name: "BPPA · 工程招标", url: webSearchFeed("site:bppa.gov.bd/advertisement-works/details Bangladesh tender"), category: "招标采购", official: true },
+  { name: "BPPA · 货物采购", url: webSearchFeed("site:bppa.gov.bd/advertisement-goods/details Bangladesh tender"), category: "招标采购", official: true },
+  { name: "BPPA · 咨询服务", url: webSearchFeed("site:bppa.gov.bd/advertisement-services/details Bangladesh EOI consultancy"), category: "招标采购", official: true },
   { name: "孟加拉央行", url: "https://www.bb.org.bd/en/index.php/mediaroom/press_release", kind: "governmentHtml", category: "宏观金融", official: true },
 ];
 
 const categoryRules = [
+  ["招标采购", /tender|procurement|invitation (?:for|to)|expression of interest|\beoi\b|request for proposal|\brfp\b|notice inviting bids?|contract award|দরপত্র|ক্রয়|প্রস্তাব আহ্বান/i],
+  ["政府会议", /cabinet meeting|ecnec meeting|ministerial meeting|inter-ministerial|planning commission meeting|government meeting|minister.{0,40}meeting|secretary.{0,40}meeting|মন্ত্রিসভা.{0,20}বৈঠক|একনেক.{0,20}সভা|মন্ত্রী.{0,30}সভা|বৈঠক/i],
   ["电力能源", /power|electric|energy|solar|gas|lng|fuel|coal|mining|bpdb|বিদ্যুৎ|জ্বালানি|গ্যাস/i],
   ["交通基建", /rail|road|bridge|metro|airport|infrastructure|construction|highway|expressway|flyover|রেল|সড়ক|সেতু|অবকাঠামো/i],
   ["港口船舶", /port|shipping|shipyard|shipbuild|maritime|vessel|chattogram|mongla|বন্দর|জাহাজ|নৌ/i],
@@ -53,6 +67,8 @@ const excludedTopicPattern = /cricket|football|world cup|tournament|sports?\b|ac
 const governmentAdminPattern = /recruit|vacan(?:cy|cies)|job\b|exam|result|admit card|leave\b|transfer|promotion|appointment|নিয়োগ|নিয়োগ|পরীক্ষা|ফলাফল|প্রবেশপত্র|ছুটি|বদলি|পদোন্নতি/i;
 
 const impactByCategory = {
+  政府会议: "可能形成新的政策方向、项目审批或部门工作安排，建议跟踪正式会议纪要及后续决定。",
+  招标采购: "可能涉及新的工程、货物或咨询服务机会，建议尽快核对资格要求、截止日期和招标文件。",
   时政政府: "可能影响政策环境、政府审批或公共项目安排，建议结合政府正式文件继续核实。",
   宏观金融: "可能影响融资、汇率、税务或跨境付款安排，建议由财务团队核对原文。",
   电力能源: "可能影响能源项目、燃料供应及电力市场安排，建议跟踪主管部门后续通知。",
@@ -174,9 +190,9 @@ async function fetchFeed(feed) {
       tag(block, "pubDate") || tag(block, "dc:date") || tag(block, "published") || tag(block, "updated")
     );
     const itemSource = plainText(tag(block, "source"));
-    const source = itemSource || feed.name;
+    const source = feed.official ? feed.name : (itemSource || feed.name);
     const articleText = `${title} ${description}`;
-    const category = categoryFor(articleText);
+    const category = feed.category || categoryFor(articleText);
     const highPriority = /tender|contract|policy|cabinet|power|energy|rail|port|bank|budget|investment/i.test(title);
     return {
       id: hash(url || `${source}:${title}`), category, title,
@@ -184,11 +200,11 @@ async function fetchFeed(feed) {
       impact: impactByCategory[category], source, sourceCount: 1,
       confidence: "有待核实",
       level: highPriority ? "重点" : "参考", time: timeAgo(publishedDate), location: "孟加拉国",
-      stage: feed.official ? "政府发布" : "媒体报道", tags: tagsFor(`${title} ${description}`, category),
+      stage: category === "招标采购" ? "招标公告" : category === "政府会议" ? "政府会议" : feed.official ? "政府发布" : "媒体报道", tags: tagsFor(`${title} ${description}`, category),
       officialSource: Boolean(feed.official),
       url, publishedAt: publishedDate?.toISOString() || "", sourceLinks: [{ name: source, url }],
     };
-  }).filter((item) => item.title && item.publishedAt && item.category && isRelevant(`${item.title} ${item.summary}`) && /^https?:\/\//.test(item.url));
+  }).filter((item) => item.title && item.publishedAt && item.category && (feed.official ? !excludedTopicPattern.test(item.title) : isRelevant(`${item.title} ${item.summary}`)) && /^https?:\/\//.test(item.url));
 }
 
 function parseGovernmentPage(feed, html) {
@@ -203,14 +219,14 @@ function parseGovernmentPage(feed, html) {
     const context = html.slice(Math.max(0, match.index - 240), Math.min(html.length, match.index + match[0].length + 520));
     const publishedDate = dateFromHtmlContext(context);
     if (!publishedDate) continue;
-    const category = feed.category || categoryFor(`${title} ${plainText(context)}`);
+    const category = categoryFor(`${title} ${plainText(context)}`) || feed.category;
     if (!category) continue;
     items.push({
       id: hash(url), category, title,
       summary: `来自${feed.name}官方网站的最新公开信息，请打开政府原始页面核对全文及附件。`,
       impact: impactByCategory[category], source: feed.name, sourceCount: 1,
       confidence: "官方确认", level: "重点", time: timeAgo(publishedDate), location: "孟加拉国",
-      stage: "政府发布", tags: tagsFor(title, category), officialSource: true,
+      stage: category === "招标采购" ? "招标公告" : category === "政府会议" ? "政府会议" : "政府发布", tags: tagsFor(title, category), officialSource: true,
       url, publishedAt: publishedDate.toISOString(), sourceLinks: [{ name: feed.name, url }],
     });
   }
@@ -242,7 +258,13 @@ const results = await Promise.allSettled(feeds.map(fetchFeed));
 const failedSources = results.flatMap((result, index) => result.status === "rejected" ? [feeds[index].name] : []);
 const rawStories = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
 const uniqueStories = [...new Map(rawStories.map((item) => [item.url.replace(/[#?]utm_.*/, ""), item])).values()];
-const clusteredStories = cluster(uniqueStories).slice(0, MAX_STORIES);
+const allClusteredStories = cluster(uniqueStories);
+const priorityStories = allClusteredStories
+  .filter((item) => item.officialSource || item.category === "政府会议" || item.category === "招标采购")
+  .slice(0, 32);
+const clusteredStories = [...new Map([...priorityStories, ...allClusteredStories].map((item) => [item.id, item])).values()]
+  .slice(0, MAX_STORIES)
+  .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
 if (!clusteredStories.length) throw new Error(`All feeds failed: ${failedSources.join(", ")}`);
 
