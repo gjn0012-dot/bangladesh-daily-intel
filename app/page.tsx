@@ -33,6 +33,7 @@ type Story = {
   originalTitle?: string;
   aiEnhanced?: boolean;
   ruleTranslated?: boolean;
+  machineTranslated?: boolean;
   confidenceScore?: number;
   confidenceReasons?: string[];
   sourceTier?: string;
@@ -47,6 +48,7 @@ type NewsPayload = {
   failedSources: string[];
   aiStatus?: string;
   aiModel?: string;
+  translationStatus?: string;
   stories: Story[];
 };
 
@@ -375,10 +377,11 @@ export default function Home() {
                       </div>
                       <button className="story-title" onClick={() => setSelected(story)}>
                         {story.aiEnhanced && <span className="ai-label">AI中文</span>}
+                        {!story.aiEnhanced && story.machineTranslated && <span className="ai-label local">机器翻译</span>}
                         {!story.aiEnhanced && story.ruleTranslated && <span className="ai-label rule">中文导读</span>}
                         {story.title}
                       </button>
-                      {(story.aiEnhanced || story.ruleTranslated) && story.originalTitle && (
+                      {(story.aiEnhanced || story.machineTranslated || story.ruleTranslated) && story.originalTitle && (
                         <p className="original-headline">原文：{story.originalTitle}</p>
                       )}
                       <p className="story-summary">{story.summary}</p>
@@ -447,6 +450,7 @@ export default function Home() {
             <section className="side-card source-card">
               <div className="side-title"><span>消息源状态</span><small>{news.successfulSources}/{news.sourceCount || 8} 正常</small></div>
               <div className="source-stat"><span><i className="green" />自动更新</span><b>每3小时</b></div>
+              <div className="source-stat"><span><i className="green" />中文新闻标题</span><b>{news.translationStatus?.includes("翻译") || stories.some((item) => item.machineTranslated) ? "本地模型" : "处理中"}</b></div>
               <div className="source-stat"><span><i className="green" />中文智能摘要</span><b>{news.aiStatus === "AI中文摘要已启用" || news.aiStatus === "无需新增摘要" ? "已启用" : "待配置"}</b></div>
               <div className="source-stat"><span><i className="blue" />主流媒体/RSS</span><b>{news.successfulSources || 0}</b></div>
               <div className="source-stat"><span><i className="gold" />读取异常</span><b>{news.failedSources.length}</b></div>
@@ -474,7 +478,7 @@ export default function Home() {
               <span>{selected.time}</span>
             </div>
             <h2>{selected.title}</h2>
-            {(selected.aiEnhanced || selected.ruleTranslated) && selected.originalTitle && <p className="modal-original">原文标题：{selected.originalTitle}</p>}
+            {(selected.aiEnhanced || selected.machineTranslated || selected.ruleTranslated) && selected.originalTitle && <p className="modal-original">原文标题：{selected.originalTitle}</p>}
             <section><h3>发生了什么</h3><p>{selected.summary}</p></section>
             {selected.facts && (
               <section className="facts-box">
