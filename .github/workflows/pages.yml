@@ -28,12 +28,20 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Cache open-source translation model
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: m2m100-418m-transformersjs-v1
       - name: Fetch latest public news feeds
         run: npm run fetch:news
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.6' }}
           AI_STORY_LIMIT: "20"
+          LOCAL_TRANSLATION: "1"
+          LOCAL_TRANSLATION_LIMIT: "40"
+          HF_HOME: ".cache/huggingface"
       - name: Build static website
         run: npm run github:build
         env:
