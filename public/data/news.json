@@ -3,5 +3,7 @@
   "sourceCount": 8,
   "successfulSources": 0,
   "failedSources": [],
+  "aiStatus": "未配置API密钥",
+  "aiModel": "",
   "stories": []
 }
