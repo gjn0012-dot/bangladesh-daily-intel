@@ -64,7 +64,7 @@ function hostname(url = "") {
 
 function sourceAssessment(story) {
   const links = story.sourceLinks?.length ? story.sourceLinks : [{ name: story.source, url: story.url }];
-  const hasOfficialDocument = links.some((link) => OFFICIAL_URL.test(hostname(link.url)));
+  const hasOfficialDocument = Boolean(story.officialSource) || links.some((link) => OFFICIAL_URL.test(hostname(link.url)));
   const names = links.map((link) => link.name).join(" ");
   let tier = "其他公开来源";
   let score = 48;
