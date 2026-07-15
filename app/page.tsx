@@ -4,6 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 
 type Confidence = "官方确认" | "多源证实" | "单源报道" | "有待核实";
 
+type KeyFacts = {
+  organizations: string[];
+  people: string[];
+  locations: string[];
+  amounts: string[];
+  dates: string[];
+  projectStage: string;
+};
+
 type Story = {
   id: number;
   category: string;
@@ -21,6 +30,13 @@ type Story = {
   url?: string;
   publishedAt?: string;
   sourceLinks?: { name: string; url: string }[];
+  originalTitle?: string;
+  aiEnhanced?: boolean;
+  confidenceScore?: number;
+  confidenceReasons?: string[];
+  sourceTier?: string;
+  officialDocument?: boolean;
+  facts?: KeyFacts;
 };
 
 type NewsPayload = {
@@ -28,6 +44,8 @@ type NewsPayload = {
   sourceCount: number;
   successfulSources: number;
   failedSources: string[];
+  aiStatus?: string;
+  aiModel?: string;
   stories: Story[];
 };
 
@@ -184,6 +202,8 @@ export default function Home() {
     sourceCount: 0,
     successfulSources: 0,
     failedSources: [],
+    aiStatus: "正在载入",
+    aiModel: "",
     stories: demoStories,
   });
 
@@ -353,13 +373,17 @@ export default function Home() {
                         <span>{story.location}</span>
                       </div>
                       <button className="story-title" onClick={() => setSelected(story)}>
+                        {story.aiEnhanced && <span className="ai-label">AI中文</span>}
                         {story.title}
                       </button>
+                      {story.aiEnhanced && story.originalTitle && (
+                        <p className="original-headline">原文：{story.originalTitle}</p>
+                      )}
                       <p className="story-summary">{story.summary}</p>
                       <div className="story-footer">
                         <div className="source-line">
                           <span className={confidenceClass[story.confidence]}>
-                            {story.confidence}
+                            {story.confidence}{story.confidenceScore ? ` · ${story.confidenceScore}分` : ""}
                           </span>
                           <span>{story.source}</span>
                           <span>{story.sourceCount}个来源</span>
@@ -421,6 +445,7 @@ export default function Home() {
             <section className="side-card source-card">
               <div className="side-title"><span>消息源状态</span><small>{news.successfulSources}/{news.sourceCount || 8} 正常</small></div>
               <div className="source-stat"><span><i className="green" />自动更新</span><b>每3小时</b></div>
+              <div className="source-stat"><span><i className="green" />中文智能摘要</span><b>{news.aiStatus === "AI中文摘要已启用" || news.aiStatus === "无需新增摘要" ? "已启用" : "待配置"}</b></div>
               <div className="source-stat"><span><i className="blue" />主流媒体/RSS</span><b>{news.successfulSources || 0}</b></div>
               <div className="source-stat"><span><i className="gold" />读取异常</span><b>{news.failedSources.length}</b></div>
               <p className="demo-note">标题与摘要来自公开信息流，请点击原始信息源核对全文。</p>
@@ -443,11 +468,32 @@ export default function Home() {
             <div className="modal-meta">
               <span className="category-label">{selected.category}</span>
               <span className={confidenceClass[selected.confidence]}>{selected.confidence}</span>
+              {selected.confidenceScore && <span className="score-chip">可信度 {selected.confidenceScore}/100</span>}
               <span>{selected.time}</span>
             </div>
             <h2>{selected.title}</h2>
+            {selected.aiEnhanced && selected.originalTitle && <p className="modal-original">原文标题：{selected.originalTitle}</p>}
             <section><h3>发生了什么</h3><p>{selected.summary}</p></section>
+            {selected.facts && (
+              <section className="facts-box">
+                <h3>关键事实</h3>
+                <div className="facts-grid">
+                  <div><span>涉及机构</span><b>{selected.facts.organizations.join("、") || "未明确"}</b></div>
+                  <div><span>人物</span><b>{selected.facts.people.join("、") || "未明确"}</b></div>
+                  <div><span>地点</span><b>{selected.facts.locations.join("、") || "未明确"}</b></div>
+                  <div><span>金额</span><b>{selected.facts.amounts.join("、") || "未明确"}</b></div>
+                  <div><span>日期</span><b>{selected.facts.dates.join("、") || "未明确"}</b></div>
+                  <div><span>项目阶段</span><b>{selected.facts.projectStage || selected.stage}</b></div>
+                </div>
+              </section>
+            )}
             <section className="impact-box"><h3>对业务的影响</h3><p>{selected.impact}</p></section>
+            {selected.confidenceReasons?.length ? (
+              <section className="confidence-box">
+                <h3>可信度依据</h3>
+                <p>{selected.confidenceReasons.join("；")}。评分仅供筛选参考，不替代对原始文件的核查。</p>
+              </section>
+            ) : null}
             <dl>
               <div><dt>项目阶段</dt><dd>{selected.stage}</dd></div>
               <div><dt>消息来源</dt><dd>{selected.source}</dd></div>
