@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 */3 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -40,7 +40,9 @@ jobs:
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.6' }}
           AI_STORY_LIMIT: "20"
           LOCAL_TRANSLATION: "1"
-          LOCAL_TRANSLATION_LIMIT: "40"
+          LOCAL_TRANSLATION_LIMIT: "80"
+          NEWS_MAX_AGE_DAYS: "30"
+          NEWS_MAX_STORIES: "80"
           HF_HOME: ".cache/huggingface"
       - name: Build static website
         run: npm run github:build
