@@ -28,6 +28,15 @@ const feeds = [
   { name: "Google News · 商业媒体", url: googleFeed("Bangladesh (site:tbsnews.net OR site:thefinancialexpress.com.bd OR site:businesspostbd.com)") },
   { name: "Google News · 政府采购与审批", url: googleFeed("Bangladesh government tender procurement ECNEC BPPA Power Division Bangladesh Bank") },
   { name: "Google News · 国际发展机构", url: googleFeed("Bangladesh (ADB OR World Bank OR AIIB OR IFC OR IMF) project loan investment") },
+  { name: "孟加拉电力司", url: "https://powerdivision.gov.bd/pages/notices", kind: "governmentHtml", category: "电力能源", official: true },
+  { name: "孟加拉铁路部", url: "https://mor.gov.bd/views/latest-news", kind: "governmentHtml", category: "交通基建", official: true },
+  { name: "孟加拉铁路局", url: "https://railway.gov.bd/views/latest-news", kind: "governmentHtml", category: "交通基建", official: true },
+  { name: "孟加拉桥梁司", url: "https://bridgesdivision.gov.bd/pages/notices", kind: "governmentHtml", category: "交通基建", official: true },
+  { name: "孟加拉桥梁管理局", url: "https://bba.gov.bd/pages/notices", kind: "governmentHtml", category: "交通基建", official: true },
+  { name: "孟加拉航运部", url: "https://mos.gov.bd/pages/news", kind: "governmentHtml", category: "港口船舶", official: true },
+  { name: "孟加拉公路运输与桥梁司", url: "https://rthd.gov.bd/pages/news", kind: "governmentHtml", category: "交通基建", official: true },
+  { name: "孟加拉公共采购管理局（BPPA）", url: "https://bppa.gov.bd/media-communication/news.html", kind: "governmentHtml", category: "宏观金融", official: true },
+  { name: "孟加拉央行", url: "https://www.bb.org.bd/en/index.php/mediaroom/press_release", kind: "governmentHtml", category: "宏观金融", official: true },
 ];
 
 const categoryRules = [
@@ -41,6 +50,7 @@ const categoryRules = [
 
 const bangladeshPattern = /bangladesh|bangladeshi|dhaka|chattogram|chittagong|gazipur|narayanganj|khulna|rajshahi|sylhet|barishal|barisal|rangpur|mymensingh|cumilla|comilla|patuakhali|payra|mongla|cox['’]?s bazar|jamuna|padma|rooppur|matarbari|bpdb|petrobangla|bida|beza|ecnec|bppa|nbr|bangladesh bank|বাংলাদেশ|ঢাকা|চট্টগ্রাম|গাজীপুর|নারায়ণগঞ্জ|খুলনা|রাজশাহী|সিলেট|বরিশাল|রংপুর|ময়মনসিংহ|কুমিল্লা|পায়রা|মোংলা/i;
 const excludedTopicPattern = /cricket|football|world cup|tournament|sports?\b|actor|actress|film\b|cinema|music|celebrity|fashion|recipe|horoscope|entertainment/i;
+const governmentAdminPattern = /recruit|vacan(?:cy|cies)|job\b|exam|result|admit card|leave\b|transfer|promotion|appointment|নিয়োগ|নিয়োগ|পরীক্ষা|ফলাফল|প্রবেশপত্র|ছুটি|বদলি|পদোন্নতি/i;
 
 const impactByCategory = {
   时政政府: "可能影响政策环境、政府审批或公共项目安排，建议结合政府正式文件继续核实。",
@@ -98,6 +108,20 @@ function validPublishedDate(value) {
   return date;
 }
 
+function banglaDigitsToAscii(value = "") {
+  return value.replace(/[০-৯]/g, (digit) => String("০১২৩৪৫৬৭৮৯".indexOf(digit)));
+}
+
+function dateFromHtmlContext(value = "") {
+  const normalized = banglaDigitsToAscii(plainText(value));
+  const matches = [...normalized.matchAll(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/g)];
+  for (const match of matches) {
+    const date = validPublishedDate(`${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}T06:00:00Z`);
+    if (date) return date;
+  }
+  return null;
+}
+
 function hash(text) {
   let value = 2166136261;
   for (const char of text) value = Math.imul(value ^ char.charCodeAt(0), 16777619);
@@ -137,6 +161,7 @@ async function fetchFeed(feed) {
   });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   const xml = await response.text();
+  if (feed.kind === "governmentHtml") return parseGovernmentPage(feed, xml);
   const blocks = [
     ...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi),
     ...xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi),
@@ -159,10 +184,37 @@ async function fetchFeed(feed) {
       impact: impactByCategory[category], source, sourceCount: 1,
       confidence: "有待核实",
       level: highPriority ? "重点" : "参考", time: timeAgo(publishedDate), location: "孟加拉国",
-      stage: "媒体报道", tags: tagsFor(`${title} ${description}`, category),
+      stage: feed.official ? "政府发布" : "媒体报道", tags: tagsFor(`${title} ${description}`, category),
+      officialSource: Boolean(feed.official),
       url, publishedAt: publishedDate?.toISOString() || "", sourceLinks: [{ name: source, url }],
     };
   }).filter((item) => item.title && item.publishedAt && item.category && isRelevant(`${item.title} ${item.summary}`) && /^https?:\/\//.test(item.url));
+}
+
+function parseGovernmentPage(feed, html) {
+  const anchors = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+  const items = [];
+  for (const match of anchors) {
+    const title = plainText(match[2]);
+    if (title.length < 12 || title.length > 260 || governmentAdminPattern.test(title) || excludedTopicPattern.test(title)) continue;
+    let url;
+    try { url = new URL(decodeEntities(match[1]), feed.url).href; } catch { continue; }
+    if (!/^https?:\/\//.test(url)) continue;
+    const context = html.slice(Math.max(0, match.index - 240), Math.min(html.length, match.index + match[0].length + 520));
+    const publishedDate = dateFromHtmlContext(context);
+    if (!publishedDate) continue;
+    const category = feed.category || categoryFor(`${title} ${plainText(context)}`);
+    if (!category) continue;
+    items.push({
+      id: hash(url), category, title,
+      summary: `来自${feed.name}官方网站的最新公开信息，请打开政府原始页面核对全文及附件。`,
+      impact: impactByCategory[category], source: feed.name, sourceCount: 1,
+      confidence: "官方确认", level: "重点", time: timeAgo(publishedDate), location: "孟加拉国",
+      stage: "政府发布", tags: tagsFor(title, category), officialSource: true,
+      url, publishedAt: publishedDate.toISOString(), sourceLinks: [{ name: feed.name, url }],
+    });
+  }
+  return [...new Map(items.map((item) => [item.url, item])).values()].slice(0, 15);
 }
 
 function cluster(items) {
@@ -180,6 +232,7 @@ function cluster(items) {
       source: sources.join(" · "),
       sourceCount: sources.length,
       sourceLinks,
+      officialSource: group.some((item) => item.officialSource),
       confidence: sources.length >= 2 && primary.confidence !== "官方确认" ? "多源证实" : primary.confidence,
     };
   });
@@ -200,6 +253,8 @@ const payload = {
   maxAgeDays: MAX_AGE_DAYS,
   sourceCount: feeds.length,
   successfulSources: feeds.length - failedSources.length,
+  officialSourceCount: feeds.filter((feed) => feed.official).length,
+  successfulOfficialSources: feeds.filter((feed) => feed.official && !failedSources.includes(feed.name)).length,
   failedSources,
   aiStatus: enrichment.aiStatus,
   aiModel: enrichment.aiModel,
