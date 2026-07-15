@@ -13,7 +13,8 @@ const feeds = [
   { name: "The Daily Star", url: "https://www.thedailystar.net/frontpage/rss.xml" },
   { name: "bdnews24.com", url: "https://bdnews24.com/?widgetName=rssfeed&widgetId=1150&getXmlFeed=true" },
   { name: "Banglanews24", url: "https://www.banglanews24.com/rss/rss.xml" },
-  { name: "The Business Standard · 头条", url: "https://www.tbsnews.net/top-news/rss.xml" },
+  { name: "The Business Standard · 孟加拉", url: "https://www.tbsnews.net/bangladesh/rss.xml" },
+  { name: "The Business Standard · 时政", url: "https://www.tbsnews.net/bangladesh/politics/rss.xml" },
   { name: "The Business Standard · 能源", url: "https://www.tbsnews.net/bangladesh/energy/rss.xml" },
   { name: "The Business Standard · 基建", url: "https://www.tbsnews.net/bangladesh/infrastructure/rss.xml" },
   { name: "The Business Standard · 经济", url: "https://www.tbsnews.net/economy/rss.xml" },
@@ -31,11 +32,15 @@ const feeds = [
 
 const categoryRules = [
   ["电力能源", /power|electric|energy|solar|gas|lng|fuel|coal|mining|bpdb|বিদ্যুৎ|জ্বালানি|গ্যাস/i],
-  ["交通基建", /rail|road|bridge|metro|airport|infrastructure|construction|highway|tender|project|রেল|সড়ক|সেতু|অবকাঠামো/i],
+  ["交通基建", /rail|road|bridge|metro|airport|infrastructure|construction|highway|expressway|flyover|রেল|সড়ক|সেতু|অবকাঠামো/i],
   ["港口船舶", /port|shipping|shipyard|shipbuild|maritime|vessel|chattogram|mongla|বন্দর|জাহাজ|নৌ/i],
   ["教育医疗", /health|hospital|medical|medicine|doctor|education|school|university|student|শিক্ষা|স্বাস্থ্য|হাসপাতাল/i],
-  ["宏观金融", /bank|finance|econom|inflation|currency|forex|trade|export|import|tax|budget|ব্যাংক|অর্থ|বাণিজ্য|বাজেট/i],
+  ["宏观金融", /bank|finance|econom|inflation|currency|forex|trade|export|import|tax|budget|investment|industry|industrial|manufactur|factory|economic zone|\bfdi\b|\bppp\b|bida|beza|banking|procurement|ব্যাংক|অর্থ|বাণিজ্য|বাজেট/i],
+  ["时政政府", /government|cabinet|minister|ministry|parliament|election|president|prime minister|chief adviser|policy|regulation|reform|legislation|ordinance|ecnec|planning commission|administration|সরকার|মন্ত্রী|সংসদ|নির্বাচন|নীতি/i],
 ];
+
+const bangladeshPattern = /bangladesh|bangladeshi|dhaka|chattogram|chittagong|gazipur|narayanganj|khulna|rajshahi|sylhet|barishal|barisal|rangpur|mymensingh|cumilla|comilla|patuakhali|payra|mongla|cox['’]?s bazar|jamuna|padma|rooppur|matarbari|bpdb|petrobangla|bida|beza|ecnec|bppa|nbr|bangladesh bank|বাংলাদেশ|ঢাকা|চট্টগ্রাম|গাজীপুর|নারায়ণগঞ্জ|খুলনা|রাজশাহী|সিলেট|বরিশাল|রংপুর|ময়মনসিংহ|কুমিল্লা|পায়রা|মোংলা/i;
+const excludedTopicPattern = /cricket|football|world cup|tournament|sports?\b|actor|actress|film\b|cinema|music|celebrity|fashion|recipe|horoscope|entertainment/i;
 
 const impactByCategory = {
   时政政府: "可能影响政策环境、政府审批或公共项目安排，建议结合政府正式文件继续核实。",
@@ -69,7 +74,11 @@ function tag(block, name) {
 }
 
 function categoryFor(text) {
-  return categoryRules.find(([, pattern]) => pattern.test(text))?.[0] || "时政政府";
+  return categoryRules.find(([, pattern]) => pattern.test(text))?.[0] || "";
+}
+
+function isRelevant(text) {
+  return bangladeshPattern.test(text) && !excludedTopicPattern.test(text) && Boolean(categoryFor(text));
 }
 
 function timeAgo(dateValue) {
@@ -141,7 +150,8 @@ async function fetchFeed(feed) {
     );
     const itemSource = plainText(tag(block, "source"));
     const source = itemSource || feed.name;
-    const category = categoryFor(`${title} ${description}`);
+    const articleText = `${title} ${description}`;
+    const category = categoryFor(articleText);
     const highPriority = /tender|contract|policy|cabinet|power|energy|rail|port|bank|budget|investment/i.test(title);
     return {
       id: hash(url || `${source}:${title}`), category, title,
@@ -152,7 +162,7 @@ async function fetchFeed(feed) {
       stage: "媒体报道", tags: tagsFor(`${title} ${description}`, category),
       url, publishedAt: publishedDate?.toISOString() || "", sourceLinks: [{ name: source, url }],
     };
-  }).filter((item) => item.title && item.publishedAt && /^https?:\/\//.test(item.url));
+  }).filter((item) => item.title && item.publishedAt && item.category && isRelevant(`${item.title} ${item.summary}`) && /^https?:\/\//.test(item.url));
 }
 
 function cluster(items) {
