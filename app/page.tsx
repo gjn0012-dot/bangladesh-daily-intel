@@ -20,6 +20,7 @@ type Story = {
   tags: string[];
   url?: string;
   publishedAt?: string;
+  sourceLinks?: { name: string; url: string }[];
 };
 
 type NewsPayload = {
@@ -463,19 +464,24 @@ export default function Home() {
                   <p className="source-panel-note">
                     以下链接直接指向本条新闻的原始页面；重要信息请结合官方文件进一步核实。
                   </p>
-                  {selected.source.split(" · ").map((name, index) => {
-                    const details = sourceDirectory[name];
+                  {(selected.sourceLinks?.length
+                    ? selected.sourceLinks
+                    : selected.source.split(" · ").map((name) => ({
+                        name,
+                        url: sourceDirectory[name]?.url || selected.url || "#",
+                      }))).map((entry, index) => {
+                    const details = sourceDirectory[entry.name];
                     return (
                       <a
-                        key={name}
-                        href={index === 0 && selected.url ? selected.url : details?.url || selected.url || "#"}
+                        key={`${entry.name}-${entry.url}`}
+                        href={entry.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="source-item"
                       >
                         <span className="source-number">{index + 1}</span>
                         <span>
-                          <b>{name}</b>
+                          <b>{entry.name}</b>
                           <small>{details?.type || "补充来源"} · 查看英文/孟加拉语原文</small>
                         </span>
                         <em>打开 ↗</em>
