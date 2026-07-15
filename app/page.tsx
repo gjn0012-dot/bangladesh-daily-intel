@@ -18,9 +18,19 @@ type Story = {
   location: string;
   stage: string;
   tags: string[];
+  url?: string;
+  publishedAt?: string;
 };
 
-const stories: Story[] = [
+type NewsPayload = {
+  generatedAt: string;
+  sourceCount: number;
+  successfulSources: number;
+  failedSources: string[];
+  stories: Story[];
+};
+
+const demoStories: Story[] = [
   {
     id: 1,
     category: "电力能源",
@@ -168,6 +178,15 @@ export default function Home() {
   const [showSources, setShowSources] = useState(false);
   const [saved, setSaved] = useState<number[]>([]);
   const [showSaved, setShowSaved] = useState(false);
+  const [news, setNews] = useState<NewsPayload>({
+    generatedAt: "",
+    sourceCount: 0,
+    successfulSources: 0,
+    failedSources: [],
+    stories: demoStories,
+  });
+
+  const stories = news.stories.length ? news.stories : demoStories;
 
   useEffect(() => {
     const stored = window.localStorage.getItem("bd-intel-saved");
@@ -176,6 +195,17 @@ export default function Home() {
       const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
       navigator.serviceWorker.register(`${basePath}/sw.js`).catch(() => undefined);
     }
+
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+    fetch(`${basePath}/data/news.json`, { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then((payload: NewsPayload) => {
+        if (Array.isArray(payload.stories) && payload.stories.length) setNews(payload);
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -194,7 +224,27 @@ export default function Home() {
           .includes(needle);
       return categoryMatch && savedMatch && queryMatch;
     });
-  }, [category, query, saved, showSaved]);
+  }, [category, query, saved, showSaved, stories]);
+
+  const generatedLabel = news.generatedAt
+    ? new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Dhaka",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(news.generatedAt))
+    : "正在载入";
+
+  const todayLabel = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(new Date());
+
+  const priorityStory = stories.find((story) => story.level === "重大") || stories[0];
 
   function toggleSaved(id: number) {
     const next = saved.includes(id)
@@ -235,28 +285,28 @@ export default function Home() {
       <main className="page">
         <section className="welcome-row">
           <div>
-            <p className="eyebrow">2026年7月15日 · 星期三 · 达卡</p>
+            <p className="eyebrow">{todayLabel} · 达卡</p>
             <h1>今日情报速览</h1>
             <p className="subhead">
-              已监测 <b>46</b> 个核心来源，过去24小时新增 <b>128</b> 条信息
+              已接入 <b>{news.sourceCount || 8}</b> 个实时信息流，本次收录 <b>{stories.length}</b> 条信息
             </p>
           </div>
           <div className="update-status">
             <span className="live-dot" />
-            <span>实时监测中<small>2分钟前更新</small></span>
+            <span>自动监测中<small>{generatedLabel} 更新</small></span>
             <button onClick={() => window.location.reload()}>刷新</button>
           </div>
         </section>
 
-        <section className="alert-card" aria-label="重大预警">
+        {priorityStory && <section className="alert-card" aria-label="重点新闻">
           <div className="alert-icon">!</div>
           <div className="alert-copy">
-            <p><span>重大预警</span> · 18分钟前</p>
-            <h2>电力部门拟协调发电企业付款及燃料供应安排</h2>
-            <p>与电站现金流直接相关，建议持续跟踪财政拨款和BPDB正式通知。</p>
+            <p><span>重点关注</span> · {priorityStory.time}</p>
+            <h2>{priorityStory.title}</h2>
+            <p>{priorityStory.impact}</p>
           </div>
-          <button onClick={() => setSelected(stories[0])}>查看详情 <span>→</span></button>
-        </section>
+          <button onClick={() => setSelected(priorityStory)}>查看详情 <span>→</span></button>
+        </section>}
 
         <div className="content-grid">
           <section className="feed">
@@ -340,9 +390,9 @@ export default function Home() {
                 <span>情报脉搏</span><small>过去24小时</small>
               </div>
               <div className="metric-row">
-                <div><b>128</b><span>新增信息</span></div>
-                <div><b>6</b><span>重点预警</span></div>
-                <div><b>14</b><span>项目机会</span></div>
+                <div><b>{stories.length}</b><span>本次收录</span></div>
+                <div><b>{stories.filter((item) => item.level !== "参考").length}</b><span>重点关注</span></div>
+                <div><b>{new Set(stories.map((item) => item.category)).size}</b><span>覆盖行业</span></div>
               </div>
               <div className="mini-bars" aria-label="七日信息趋势">
                 {[42, 54, 39, 68, 56, 76, 92].map((height, index) => (
@@ -368,12 +418,11 @@ export default function Home() {
             </section>
 
             <section className="side-card source-card">
-              <div className="side-title"><span>消息源状态</span><small>46/48 正常</small></div>
-              <div className="source-stat"><span><i className="green" />政府官方</span><b>18</b></div>
-              <div className="source-stat"><span><i className="blue" />主流媒体</span><b>16</b></div>
-              <div className="source-stat"><span><i className="gold" />行业机构</span><b>7</b></div>
-              <div className="source-stat"><span><i className="gray" />社交媒体</span><b>5</b></div>
-              <p className="demo-note">当前为功能原型，页面内容为演示数据。</p>
+              <div className="side-title"><span>消息源状态</span><small>{news.successfulSources}/{news.sourceCount || 8} 正常</small></div>
+              <div className="source-stat"><span><i className="green" />自动更新</span><b>每3小时</b></div>
+              <div className="source-stat"><span><i className="blue" />主流媒体/RSS</span><b>{news.successfulSources || 0}</b></div>
+              <div className="source-stat"><span><i className="gold" />读取异常</span><b>{news.failedSources.length}</b></div>
+              <p className="demo-note">标题与摘要来自公开信息流，请点击原始信息源核对全文。</p>
             </section>
           </aside>
         </div>
@@ -412,14 +461,14 @@ export default function Home() {
               {showSources && (
                 <div className="source-panel">
                   <p className="source-panel-note">
-                    当前原型链接至信息源主页；接入实时采集后，将直接链接到对应新闻或政府文件原文。
+                    以下链接直接指向本条新闻的原始页面；重要信息请结合官方文件进一步核实。
                   </p>
                   {selected.source.split(" · ").map((name, index) => {
                     const details = sourceDirectory[name];
                     return (
                       <a
                         key={name}
-                        href={details?.url || "#"}
+                        href={index === 0 && selected.url ? selected.url : details?.url || selected.url || "#"}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="source-item"
