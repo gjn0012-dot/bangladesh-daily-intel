@@ -128,7 +128,7 @@ async function fetchFeed(feed) {
       confidence: official ? "官方确认" : "单源报道",
       level: highPriority ? "重点" : "参考", time: timeAgo(publishedAt), location: "孟加拉国",
       stage: official ? "正式发布" : "媒体报道", tags: tagsFor(`${title} ${description}`, category),
-      url, publishedAt: new Date(publishedAt).toISOString(),
+      url, publishedAt: new Date(publishedAt).toISOString(), sourceLinks: [{ name: source, url }],
     };
   }).filter((item) => item.title && /^https?:\/\//.test(item.url));
 }
@@ -142,10 +142,12 @@ function cluster(items) {
   return groups.map((group) => {
     const primary = group[0];
     const sources = [...new Set(group.map((item) => item.source))];
+    const sourceLinks = [...new Map(group.flatMap((item) => item.sourceLinks).map((link) => [link.name, link])).values()];
     return {
       ...primary,
       source: sources.join(" · "),
       sourceCount: sources.length,
+      sourceLinks,
       confidence: sources.length >= 2 && primary.confidence !== "官方确认" ? "多源证实" : primary.confidence,
     };
   });
