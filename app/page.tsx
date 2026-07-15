@@ -1,0 +1,451 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+type Confidence = "官方确认" | "多源证实" | "单源报道" | "有待核实";
+
+type Story = {
+  id: number;
+  category: string;
+  title: string;
+  summary: string;
+  impact: string;
+  source: string;
+  sourceCount: number;
+  confidence: Confidence;
+  level: "重大" | "重点" | "参考";
+  time: string;
+  location: string;
+  stage: string;
+  tags: string[];
+};
+
+const stories: Story[] = [
+  {
+    id: 1,
+    category: "电力能源",
+    title: "电力部门拟于下周召开重点发电企业付款安排协调会议",
+    summary:
+      "根据主管部门公开日程及两家主流媒体报道，会议将讨论发电企业应收账款和燃料供应保障。具体拨款规模尚未正式公布。",
+    impact:
+      "与电站现金流和燃料采购直接相关，建议持续跟踪财政部门拨款及BPDB后续通知。",
+    source: "Power Division · The Daily Star",
+    sourceCount: 3,
+    confidence: "多源证实",
+    level: "重大",
+    time: "18分钟前",
+    location: "达卡",
+    stage: "政策协调",
+    tags: ["BPDB", "电费回款", "燃料供应"],
+  },
+  {
+    id: 2,
+    category: "时政政府",
+    title: "内阁会议审议多项基础设施项目实施进度",
+    summary:
+      "官方会议简报显示，政府要求有关部门加快重点项目审批和土地征收，并强化跨部门进度协调。项目完整名单有待发布。",
+    impact:
+      "可能影响在建交通项目的审批及预算调整，应关注后续正式会议纪要和责任部门安排。",
+    source: "Cabinet Division",
+    sourceCount: 1,
+    confidence: "官方确认",
+    level: "重点",
+    time: "42分钟前",
+    location: "达卡",
+    stage: "政府审议",
+    tags: ["内阁", "项目审批", "土地征收"],
+  },
+  {
+    id: 3,
+    category: "交通基建",
+    title: "铁路部门更新年度采购计划，多项咨询服务进入准备阶段",
+    summary:
+      "公共采购平台出现新的年度采购计划，涉及线路升级、信号系统及工程咨询。部分项目仍处于预算和融资确认阶段。",
+    impact:
+      "属于前期市场机会，可提前核对业绩门槛、潜在合作方和融资机构采购规则。",
+    source: "BPPA e-GP · Bangladesh Railway",
+    sourceCount: 2,
+    confidence: "官方确认",
+    level: "重点",
+    time: "1小时前",
+    location: "全国",
+    stage: "采购计划",
+    tags: ["铁路", "咨询服务", "招标机会"],
+  },
+  {
+    id: 4,
+    category: "港口船舶",
+    title: "港口扩建配套航道工程正在研究新的融资方案",
+    summary:
+      "一家财经媒体援引项目相关人士称，业主正在与多家融资机构讨论建设方案，目前尚未发现业主或融资机构的正式公告。",
+    impact:
+      "可作为市场线索跟踪，但在正式文件发布前不宜判断项目融资已经落实。",
+    source: "The Financial Express",
+    sourceCount: 1,
+    confidence: "单源报道",
+    level: "参考",
+    time: "2小时前",
+    location: "吉大港",
+    stage: "融资研究",
+    tags: ["港口", "航道", "融资"],
+  },
+  {
+    id: 5,
+    category: "宏观金融",
+    title: "央行发布外汇业务新通知，进一步简化部分对外付款材料",
+    summary:
+      "孟加拉央行发布正式通知，对授权银行办理部分进口和服务付款的文件要求作出调整，具体适用范围需结合原文判断。",
+    impact:
+      "可能影响设备进口、服务费及项目公司付款流程，建议财务和银行团队核对通知原文。",
+    source: "Bangladesh Bank",
+    sourceCount: 1,
+    confidence: "官方确认",
+    level: "重大",
+    time: "3小时前",
+    location: "全国",
+    stage: "正式发布",
+    tags: ["外汇", "付款", "央行"],
+  },
+  {
+    id: 6,
+    category: "教育医疗",
+    title: "卫生部门计划启动区域医院设备升级项目",
+    summary:
+      "政府通讯社报道卫生主管部门正在准备一批区域医院设备升级项目，预计将使用政府预算和发展伙伴融资。",
+    impact:
+      "医疗设备和医院工程存在潜在机会，下一步应关注DPP审批和采购公告。",
+    source: "BSS · Ministry of Health",
+    sourceCount: 2,
+    confidence: "多源证实",
+    level: "参考",
+    time: "5小时前",
+    location: "多地区",
+    stage: "项目准备",
+    tags: ["医院", "医疗设备", "发展融资"],
+  },
+];
+
+const categories = [
+  "全部",
+  "时政政府",
+  "宏观金融",
+  "电力能源",
+  "交通基建",
+  "港口船舶",
+  "教育医疗",
+];
+
+const projects = [
+  { name: "帕亚拉电站", count: 12, trend: "+3" },
+  { name: "达卡—阿苏利亚高架", count: 8, trend: "+1" },
+  { name: "ADB铁路项目", count: 7, trend: "+2" },
+  { name: "孟中新能源", count: 5, trend: "+1" },
+];
+
+const confidenceClass: Record<Confidence, string> = {
+  官方确认: "verified official",
+  多源证实: "verified multi",
+  单源报道: "verified single",
+  有待核实: "verified pending",
+};
+
+const sourceDirectory: Record<string, { type: string; url: string }> = {
+  "Power Division": { type: "政府官方", url: "https://powerdivision.gov.bd/" },
+  "The Daily Star": { type: "主流媒体", url: "https://www.thedailystar.net/" },
+  "Cabinet Division": { type: "政府官方", url: "https://cabinet.gov.bd/" },
+  "BPPA e-GP": { type: "政府采购", url: "https://www.eprocure.gov.bd/" },
+  "Bangladesh Railway": { type: "政府官方", url: "https://railway.gov.bd/" },
+  "The Financial Express": { type: "主流媒体", url: "https://thefinancialexpress.com.bd/" },
+  "Bangladesh Bank": { type: "监管机构", url: "https://www.bb.org.bd/" },
+  BSS: { type: "国家通讯社", url: "https://www.bssnews.net/" },
+  "Ministry of Health": { type: "政府官方", url: "https://mohfw.gov.bd/" },
+};
+
+export default function Home() {
+  const [category, setCategory] = useState("全部");
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Story | null>(null);
+  const [showSources, setShowSources] = useState(false);
+  const [saved, setSaved] = useState<number[]>([]);
+  const [showSaved, setShowSaved] = useState(false);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("bd-intel-saved");
+    if (stored) setSaved(JSON.parse(stored));
+    if ("serviceWorker" in navigator) {
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+      navigator.serviceWorker.register(`${basePath}/sw.js`).catch(() => undefined);
+    }
+  }, []);
+
+  useEffect(() => {
+    setShowSources(false);
+  }, [selected?.id]);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return stories.filter((story) => {
+      const categoryMatch = category === "全部" || story.category === category;
+      const savedMatch = !showSaved || saved.includes(story.id);
+      const queryMatch =
+        !needle ||
+        `${story.title}${story.summary}${story.tags.join("")}`
+          .toLowerCase()
+          .includes(needle);
+      return categoryMatch && savedMatch && queryMatch;
+    });
+  }, [category, query, saved, showSaved]);
+
+  function toggleSaved(id: number) {
+    const next = saved.includes(id)
+      ? saved.filter((item) => item !== id)
+      : [...saved, id];
+    setSaved(next);
+    window.localStorage.setItem("bd-intel-saved", JSON.stringify(next));
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand" aria-label="孟加拉每日头条">
+          <span className="brand-mark">孟</span>
+          <span>
+            <strong>孟加拉每日头条</strong>
+            <small>BUSINESS INTELLIGENCE</small>
+          </span>
+        </div>
+        <label className="search-box">
+          <span aria-hidden="true">⌕</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索政策、项目、机构或人物"
+            aria-label="搜索新闻"
+          />
+          <kbd>⌘ K</kbd>
+        </label>
+        <div className="header-actions">
+          <button className="icon-button" aria-label="通知">
+            ♢<span className="notification-dot" />
+          </button>
+          <div className="avatar">QY</div>
+        </div>
+      </header>
+
+      <main className="page">
+        <section className="welcome-row">
+          <div>
+            <p className="eyebrow">2026年7月15日 · 星期三 · 达卡</p>
+            <h1>今日情报速览</h1>
+            <p className="subhead">
+              已监测 <b>46</b> 个核心来源，过去24小时新增 <b>128</b> 条信息
+            </p>
+          </div>
+          <div className="update-status">
+            <span className="live-dot" />
+            <span>实时监测中<small>2分钟前更新</small></span>
+            <button onClick={() => window.location.reload()}>刷新</button>
+          </div>
+        </section>
+
+        <section className="alert-card" aria-label="重大预警">
+          <div className="alert-icon">!</div>
+          <div className="alert-copy">
+            <p><span>重大预警</span> · 18分钟前</p>
+            <h2>电力部门拟协调发电企业付款及燃料供应安排</h2>
+            <p>与电站现金流直接相关，建议持续跟踪财政拨款和BPDB正式通知。</p>
+          </div>
+          <button onClick={() => setSelected(stories[0])}>查看详情 <span>→</span></button>
+        </section>
+
+        <div className="content-grid">
+          <section className="feed">
+            <div className="section-heading">
+              <div>
+                <span className="section-kicker">DAILY BRIEF</span>
+                <h2>今日头条 <em>{filtered.length}</em></h2>
+              </div>
+              <button
+                className={showSaved ? "text-button active" : "text-button"}
+                onClick={() => setShowSaved(!showSaved)}
+              >
+                {showSaved ? "查看全部" : `我的关注 ${saved.length || ""}`}
+              </button>
+            </div>
+
+            <div className="category-tabs" role="tablist" aria-label="新闻分类">
+              {categories.map((item) => (
+                <button
+                  key={item}
+                  role="tab"
+                  aria-selected={category === item}
+                  className={category === item ? "active" : ""}
+                  onClick={() => setCategory(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+
+            <div className="story-list">
+              {filtered.length ? (
+                filtered.map((story, index) => (
+                  <article
+                    className={`story-card ${story.level === "重大" ? "critical" : ""}`}
+                    key={story.id}
+                  >
+                    <div className="story-index">{String(index + 1).padStart(2, "0")}</div>
+                    <div className="story-body">
+                      <div className="story-meta">
+                        <span className="category-label">{story.category}</span>
+                        <span>{story.time}</span>
+                        <span>{story.location}</span>
+                      </div>
+                      <button className="story-title" onClick={() => setSelected(story)}>
+                        {story.title}
+                      </button>
+                      <p className="story-summary">{story.summary}</p>
+                      <div className="story-footer">
+                        <div className="source-line">
+                          <span className={confidenceClass[story.confidence]}>
+                            {story.confidence}
+                          </span>
+                          <span>{story.source}</span>
+                          <span>{story.sourceCount}个来源</span>
+                        </div>
+                        <button
+                          className={saved.includes(story.id) ? "save-button saved" : "save-button"}
+                          onClick={() => toggleSaved(story.id)}
+                          aria-label={saved.includes(story.id) ? "取消关注" : "加入关注"}
+                        >
+                          {saved.includes(story.id) ? "★ 已关注" : "☆ 关注"}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="empty-state">
+                  <span>⌕</span>
+                  <h3>没有找到相关信息</h3>
+                  <p>试试其他关键词或切换行业分类。</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <aside className="sidebar">
+            <section className="side-card pulse-card">
+              <div className="side-title">
+                <span>情报脉搏</span><small>过去24小时</small>
+              </div>
+              <div className="metric-row">
+                <div><b>128</b><span>新增信息</span></div>
+                <div><b>6</b><span>重点预警</span></div>
+                <div><b>14</b><span>项目机会</span></div>
+              </div>
+              <div className="mini-bars" aria-label="七日信息趋势">
+                {[42, 54, 39, 68, 56, 76, 92].map((height, index) => (
+                  <span key={index} style={{ height: `${height}%` }} />
+                ))}
+              </div>
+              <div className="bar-labels"><span>7月9日</span><span>今日</span></div>
+            </section>
+
+            <section className="side-card">
+              <div className="side-title">
+                <span>重点项目动态</span><button>全部项目</button>
+              </div>
+              <div className="project-list">
+                {projects.map((project, index) => (
+                  <button key={project.name} onClick={() => setQuery(project.name.split("—")[0])}>
+                    <span className={`project-badge c${index + 1}`}>{index + 1}</span>
+                    <span><b>{project.name}</b><small>{project.count}条相关信息</small></span>
+                    <em>{project.trend}</em>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="side-card source-card">
+              <div className="side-title"><span>消息源状态</span><small>46/48 正常</small></div>
+              <div className="source-stat"><span><i className="green" />政府官方</span><b>18</b></div>
+              <div className="source-stat"><span><i className="blue" />主流媒体</span><b>16</b></div>
+              <div className="source-stat"><span><i className="gold" />行业机构</span><b>7</b></div>
+              <div className="source-stat"><span><i className="gray" />社交媒体</span><b>5</b></div>
+              <p className="demo-note">当前为功能原型，页面内容为演示数据。</p>
+            </section>
+          </aside>
+        </div>
+      </main>
+
+      <nav className="mobile-nav" aria-label="手机导航">
+        <button className="active"><span>⌂</span>头条</button>
+        <button onClick={() => setCategory("交通基建")}><span>◇</span>机会</button>
+        <button onClick={() => setShowSaved(true)}><span>☆</span>关注</button>
+        <button><span>☰</span>更多</button>
+      </nav>
+
+      {selected && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setSelected(null)}>
+          <article className="story-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="modal-close" onClick={() => setSelected(null)} aria-label="关闭详情">×</button>
+            <div className="modal-meta">
+              <span className="category-label">{selected.category}</span>
+              <span className={confidenceClass[selected.confidence]}>{selected.confidence}</span>
+              <span>{selected.time}</span>
+            </div>
+            <h2>{selected.title}</h2>
+            <section><h3>发生了什么</h3><p>{selected.summary}</p></section>
+            <section className="impact-box"><h3>对业务的影响</h3><p>{selected.impact}</p></section>
+            <dl>
+              <div><dt>项目阶段</dt><dd>{selected.stage}</dd></div>
+              <div><dt>消息来源</dt><dd>{selected.source}</dd></div>
+              <div><dt>交叉来源</dt><dd>{selected.sourceCount}个独立来源</dd></div>
+            </dl>
+            <div className="source-panel-wrap">
+              <button className="source-toggle" onClick={() => setShowSources(!showSources)}>
+                <span>↗</span>
+                {showSources ? "收起原始信息源" : `查看原始信息源（${selected.sourceCount}）`}
+                <em>{showSources ? "−" : "+"}</em>
+              </button>
+              {showSources && (
+                <div className="source-panel">
+                  <p className="source-panel-note">
+                    当前原型链接至信息源主页；接入实时采集后，将直接链接到对应新闻或政府文件原文。
+                  </p>
+                  {selected.source.split(" · ").map((name, index) => {
+                    const details = sourceDirectory[name];
+                    return (
+                      <a
+                        key={name}
+                        href={details?.url || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="source-item"
+                      >
+                        <span className="source-number">{index + 1}</span>
+                        <span>
+                          <b>{name}</b>
+                          <small>{details?.type || "补充来源"} · 查看英文/孟加拉语原文</small>
+                        </span>
+                        <em>打开 ↗</em>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="tag-row">{selected.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => toggleSaved(selected.id)}>
+                {saved.includes(selected.id) ? "★ 已加入关注" : "☆ 加入关注"}
+              </button>
+              <button className="primary" onClick={() => alert("已生成简要汇报（演示）")}>生成领导汇报</button>
+            </div>
+          </article>
+        </div>
+      )}
+    </div>
+  );
+}
