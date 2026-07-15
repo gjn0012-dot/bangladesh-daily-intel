@@ -1,18 +1,32 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { enrichStories } from "./enrich-news.mjs";
 
+const MAX_AGE_DAYS = Math.max(1, Number(process.env.NEWS_MAX_AGE_DAYS || 30));
+const MAX_STORIES = Math.max(20, Number(process.env.NEWS_MAX_STORIES || 80));
+const cutoffTime = Date.now() - MAX_AGE_DAYS * 86400000;
+const futureTolerance = Date.now() + 36 * 3600000;
+
 const googleFeed = (query) =>
-  `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en&gl=BD&ceid=BD:en`;
+  `https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:${MAX_AGE_DAYS}d`)}&hl=en&gl=BD&ceid=BD:en`;
 
 const feeds = [
   { name: "The Daily Star", url: "https://www.thedailystar.net/frontpage/rss.xml" },
   { name: "bdnews24.com", url: "https://bdnews24.com/?widgetName=rssfeed&widgetId=1150&getXmlFeed=true" },
   { name: "Banglanews24", url: "https://www.banglanews24.com/rss/rss.xml" },
+  { name: "The Business Standard · 头条", url: "https://www.tbsnews.net/top-news/rss.xml" },
+  { name: "The Business Standard · 能源", url: "https://www.tbsnews.net/bangladesh/energy/rss.xml" },
+  { name: "The Business Standard · 基建", url: "https://www.tbsnews.net/bangladesh/infrastructure/rss.xml" },
+  { name: "The Business Standard · 经济", url: "https://www.tbsnews.net/economy/rss.xml" },
   { name: "Google News · 时政", url: googleFeed("Bangladesh government politics cabinet policy") },
+  { name: "Google News · 宏观金融", url: googleFeed("Bangladesh economy bank finance budget tax currency trade") },
   { name: "Google News · 能源", url: googleFeed("Bangladesh power energy electricity gas LNG mining") },
   { name: "Google News · 基建", url: googleFeed("Bangladesh infrastructure railway road bridge airport project tender") },
   { name: "Google News · 港航", url: googleFeed("Bangladesh port shipping shipbuilding maritime Chattogram") },
   { name: "Google News · 教育医疗", url: googleFeed("Bangladesh education health hospital medicine government") },
+  { name: "Google News · 通讯社与主流媒体", url: googleFeed("Bangladesh (site:bssnews.net OR site:unb.com.bd OR site:dhakatribune.com)") },
+  { name: "Google News · 商业媒体", url: googleFeed("Bangladesh (site:tbsnews.net OR site:thefinancialexpress.com.bd OR site:businesspostbd.com)") },
+  { name: "Google News · 政府采购与审批", url: googleFeed("Bangladesh government tender procurement ECNEC BPPA Power Division Bangladesh Bank") },
+  { name: "Google News · 国际发展机构", url: googleFeed("Bangladesh (ADB OR World Bank OR AIIB OR IFC OR IMF) project loan investment") },
 ];
 
 const categoryRules = [
@@ -67,6 +81,14 @@ function timeAgo(dateValue) {
   return `${Math.floor(minutes / 1440)}天前`;
 }
 
+function validPublishedDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  const timestamp = date.getTime();
+  if (!Number.isFinite(timestamp) || timestamp < cutoffTime || timestamp > futureTolerance) return null;
+  return date;
+}
+
 function hash(text) {
   let value = 2166136261;
   for (const char of text) value = Math.imul(value ^ char.charCodeAt(0), 16777619);
@@ -106,12 +128,17 @@ async function fetchFeed(feed) {
   });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   const xml = await response.text();
-  const blocks = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)].map((match) => match[0]);
+  const blocks = [
+    ...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi),
+    ...xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi),
+  ].map((match) => match[0]);
   return blocks.slice(0, 25).map((block) => {
     const title = plainText(tag(block, "title"));
     const url = plainText(tag(block, "link") || tag(block, "guid"));
     const description = plainText(tag(block, "description") || tag(block, "content:encoded"));
-    const publishedAt = tag(block, "pubDate") || tag(block, "dc:date") || new Date().toISOString();
+    const publishedDate = validPublishedDate(
+      tag(block, "pubDate") || tag(block, "dc:date") || tag(block, "published") || tag(block, "updated")
+    );
     const itemSource = plainText(tag(block, "source"));
     const source = itemSource || feed.name;
     const category = categoryFor(`${title} ${description}`);
@@ -121,11 +148,11 @@ async function fetchFeed(feed) {
       summary: description && description !== title ? description.slice(0, 320) : `来自${source}公开信息流的最新报道，请打开原始页面查看全文。`,
       impact: impactByCategory[category], source, sourceCount: 1,
       confidence: "有待核实",
-      level: highPriority ? "重点" : "参考", time: timeAgo(publishedAt), location: "孟加拉国",
+      level: highPriority ? "重点" : "参考", time: timeAgo(publishedDate), location: "孟加拉国",
       stage: "媒体报道", tags: tagsFor(`${title} ${description}`, category),
-      url, publishedAt: new Date(publishedAt).toISOString(), sourceLinks: [{ name: source, url }],
+      url, publishedAt: publishedDate?.toISOString() || "", sourceLinks: [{ name: source, url }],
     };
-  }).filter((item) => item.title && /^https?:\/\//.test(item.url));
+  }).filter((item) => item.title && item.publishedAt && /^https?:\/\//.test(item.url));
 }
 
 function cluster(items) {
@@ -152,7 +179,7 @@ const results = await Promise.allSettled(feeds.map(fetchFeed));
 const failedSources = results.flatMap((result, index) => result.status === "rejected" ? [feeds[index].name] : []);
 const rawStories = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
 const uniqueStories = [...new Map(rawStories.map((item) => [item.url.replace(/[#?]utm_.*/, ""), item])).values()];
-const clusteredStories = cluster(uniqueStories).slice(0, 60);
+const clusteredStories = cluster(uniqueStories).slice(0, MAX_STORIES);
 
 if (!clusteredStories.length) throw new Error(`All feeds failed: ${failedSources.join(", ")}`);
 
@@ -160,6 +187,7 @@ const enrichment = await enrichStories(clusteredStories);
 
 const payload = {
   generatedAt: new Date().toISOString(),
+  maxAgeDays: MAX_AGE_DAYS,
   sourceCount: feeds.length,
   successfulSources: feeds.length - failedSources.length,
   failedSources,
