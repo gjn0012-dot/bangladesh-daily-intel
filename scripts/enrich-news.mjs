@@ -1,3 +1,5 @@
+import { translateHeadlines } from "./local-translate.mjs";
+
 const MAINSTREAM = /daily star|bdnews24|dhaka tribune|financial express|business standard|prothom alo|new age|daily sun|unb|banglanews24/i;
 const STATE_NEWS = /\bbss\b|bangladesh sangbad sangstha/i;
 const DEVELOPMENT = /world bank|asian development bank|\badb\b|\baiib\b|ifc/i;
@@ -128,7 +130,7 @@ async function previousByUrl() {
     const response = await fetch("https://gjn0012-dot.github.io/bangladesh-daily-intel/data/news.json", { signal: AbortSignal.timeout(12000), cache: "no-store" });
     if (!response.ok) return new Map();
     const payload = await response.json();
-    return new Map((payload.stories || []).filter((story) => story.aiEnhanced).map((story) => [canonicalUrl(story.url), story]));
+    return new Map((payload.stories || []).filter((story) => story.aiEnhanced || story.machineTranslated).map((story) => [canonicalUrl(story.url), story]));
   } catch { return new Map(); }
 }
 
@@ -186,7 +188,8 @@ export async function enrichStories(inputStories) {
     if (!cached) return assessed;
     return {
       ...assessed, title: cached.title, originalTitle: cached.originalTitle || story.title,
-      summary: cached.summary, aiEnhanced: true,
+      summary: cached.summary,
+      aiEnhanced: Boolean(cached.aiEnhanced), machineTranslated: Boolean(cached.machineTranslated),
       facts: cached.facts || assessed.facts,
     };
   });
@@ -217,11 +220,15 @@ export async function enrichStories(inputStories) {
     aiStatus = `AI暂时不可用：${error.message}`;
     console.warn(aiStatus);
   }
+  const localTranslation = await translateHeadlines(stories);
   for (const story of stories) {
-    if (story.aiEnhanced) continue;
+    if (story.aiEnhanced || story.machineTranslated) continue;
     story.originalTitle = story.originalTitle || story.title;
     story.title = ruleChineseTitle(story);
     story.ruleTranslated = true;
   }
-  return { stories, aiStatus, aiModel: process.env.OPENAI_API_KEY ? (process.env.OPENAI_MODEL || "gpt-5.6") : "" };
+  return {
+    stories, aiStatus, aiModel: process.env.OPENAI_API_KEY ? (process.env.OPENAI_MODEL || "gpt-5.6") : "",
+    translationStatus: localTranslation.status,
+  };
 }
