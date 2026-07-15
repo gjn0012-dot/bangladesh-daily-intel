@@ -105,6 +105,7 @@ h1 { margin: 0; font-family: Georgia, "Songti SC", serif; font-size: clamp(34px,
 .story-title { display: block; width: 100%; margin: 8px 0 7px; padding: 0; border: 0; background: transparent; text-align: left; font-family: Georgia, "Songti SC", serif; font-size: 19px; font-weight: 700; line-height: 1.45; cursor: pointer; }
 .story-title:hover { color: var(--green); }
 .ai-label { display: inline-block; margin-right: 7px; padding: 2px 5px; border-radius: 3px; color: #fff; background: #286d57; font-family: Arial, sans-serif; font-size: 8px; vertical-align: 3px; }
+.ai-label.rule { color: #765519; background: #f4e8cb; }
 .original-headline { margin: -2px 0 7px; color: #929b97; font-size: 9px; line-height: 1.5; }
 .story-summary { max-width: 760px; margin: 0; color: #5e6964; font-size: 12px; line-height: 1.75; }
 .story-footer { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-top: 12px; }
