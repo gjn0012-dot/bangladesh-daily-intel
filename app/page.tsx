@@ -163,6 +163,8 @@ const demoStories: Story[] = [
 const categories = [
   "全部",
   "时政政府",
+  "政府会议",
+  "招标采购",
   "宏观金融",
   "电力能源",
   "交通基建",
