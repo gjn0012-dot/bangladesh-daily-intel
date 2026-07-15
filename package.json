@@ -2,13 +2,12 @@
   "name": "bangladesh-daily-intel",
   "version": "0.1.0",
   "private": true,
-  "engines": {
-    "node": ">=22.13.0"
-  },
+  "engines": { "node": ">=22.13.0" },
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
     "build": "bash scripts/build-verified.sh",
+    "fetch:news": "node scripts/fetch-news.mjs",
     "github:build": "next build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
@@ -41,5 +40,5 @@
     "wrangler": "4.92.0"
   },
   "type": "module",
-  "displayName": "\u5b5f\u52a0\u62c9\u6bcf\u65e5\u5934\u6761"
+  "displayName": "孟加拉每日头条"
 }
