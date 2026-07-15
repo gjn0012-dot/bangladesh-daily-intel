@@ -20,6 +20,42 @@ const LOCATIONS = [
 const unique = (values) => [...new Set(values.filter(Boolean))];
 const canonicalUrl = (url = "") => url.replace(/[?#].*$/, "").replace(/\/$/, "");
 
+const ORGANIZATION_ZH = new Map([
+  ["Bangladesh Bank", "孟加拉央行"], ["Power Division", "电力司"], ["Petrobangla", "孟加拉石油天然气公司"],
+  ["Bangladesh Railway", "孟加拉铁路局"], ["Bangladesh Bridge Authority", "孟加拉桥梁管理局"],
+  ["Chattogram Port Authority", "吉大港港务局"], ["Mongla Port Authority", "蒙格拉港务局"],
+  ["Asian Development Bank", "亚洲开发银行"], ["World Bank", "世界银行"],
+]);
+
+function ruleChineseTitle(story) {
+  const original = story.originalTitle || story.title;
+  const facts = story.facts || ruleFacts(story);
+  const organization = facts.organizations.find((name) => ORGANIZATION_ZH.has(name) || /^[A-Z][A-Z0-9-]{2,8}$/.test(name));
+  const actor = organization ? (ORGANIZATION_ZH.get(organization) || organization) : "";
+  const location = facts.locations.find((name) => name !== "孟加拉国");
+  const place = location ? `${location}：` : "孟加拉国：";
+  const topics = [
+    ["电力", /power|electric|bpdb|বিদ্যুৎ/i], ["天然气", /natural gas|\bgas\b|lng|গ্যাস/i], ["能源", /energy|fuel|coal|জ্বালানি/i],
+    ["银行金融", /bank|finance|forex|currency|ব্যাংক/i], ["通胀", /inflation/i], ["预算", /budget|বাজেট/i],
+    ["铁路", /rail|রেল/i], ["公路", /road|highway|সড়ক/i], ["桥梁", /bridge|সেতু/i],
+    ["港口", /port|বন্দর/i], ["航运船舶", /shipping|ship|maritime|জাহাজ/i], ["基础设施项目", /infrastructure|construction|project|অবকাঠামো/i],
+    ["医疗卫生", /health|hospital|medical|medicine|স্বাস্থ্য|হাসপাতাল/i], ["教育", /education|school|university|student|শিক্ষা/i],
+    ["政府政策", /government|cabinet|minister|policy/i], ["选举", /election|vote/i], ["贸易", /trade|export|import/i],
+  ];
+  const topic = topics.find(([, pattern]) => pattern.test(original))?.[0] || story.category;
+  const actions = [
+    ["获批", /\bapprov(?:e|ed|al)|cabinet nod/i], ["宣布新安排", /\bannounc(?:e|ed|ement)/i], ["启动新计划", /\blaunch(?:es|ed|ing)?|inaugurat/i],
+    ["签署相关协议", /\bsign(?:s|ed|ing)?|agreement signed/i], ["计划推进", /\bplan(?:s|ned|ning)?|proposal/i], ["寻求支持或融资", /\bseek(?:s|ing)?|funding|financing|loan/i],
+    ["发布招标采购动态", /tender|procurement|invitation for bid|\brfp\b/i], ["更新建设进展", /construction|implementation|work progress/i],
+    ["出现上升变化", /\brise|rises|rose|increase|surge|hike/i], ["出现下降变化", /\bfall|falls|fell|decrease|decline|cut/i],
+    ["发出风险警示", /\bwarn|warning|risk|crisis|shortage/i], ["举行会谈", /\bmeet|meeting|talks/i],
+    ["出现抗议或争议", /protest|demonstration|dispute/i], ["恢复运行", /resume|reopen/i], ["暂停或延期", /suspend|delay|postpone/i],
+  ];
+  const action = actions.find(([, pattern]) => pattern.test(original))?.[0] || `${facts.projectStage || "相关领域"}出现新动态`;
+  const amount = facts.amounts[0] ? `，涉及${facts.amounts[0]}` : "";
+  return `${place}${actor ? `${actor}` : ""}${topic}${action}${amount}`.replace(/动态出现新动态/, "最新动态");
+}
+
 function hostname(url = "") {
   try { return new URL(url).hostname; } catch { return ""; }
 }
@@ -180,6 +216,12 @@ export async function enrichStories(inputStories) {
   } catch (error) {
     aiStatus = `AI暂时不可用：${error.message}`;
     console.warn(aiStatus);
+  }
+  for (const story of stories) {
+    if (story.aiEnhanced) continue;
+    story.originalTitle = story.originalTitle || story.title;
+    story.title = ruleChineseTitle(story);
+    story.ruleTranslated = true;
   }
   return { stories, aiStatus, aiModel: process.env.OPENAI_API_KEY ? (process.env.OPENAI_MODEL || "gpt-5.6") : "" };
 }
