@@ -32,6 +32,7 @@ type Story = {
   sourceLinks?: { name: string; url: string }[];
   originalTitle?: string;
   aiEnhanced?: boolean;
+  ruleTranslated?: boolean;
   confidenceScore?: number;
   confidenceReasons?: string[];
   sourceTier?: string;
@@ -374,9 +375,10 @@ export default function Home() {
                       </div>
                       <button className="story-title" onClick={() => setSelected(story)}>
                         {story.aiEnhanced && <span className="ai-label">AI中文</span>}
+                        {!story.aiEnhanced && story.ruleTranslated && <span className="ai-label rule">中文导读</span>}
                         {story.title}
                       </button>
-                      {story.aiEnhanced && story.originalTitle && (
+                      {(story.aiEnhanced || story.ruleTranslated) && story.originalTitle && (
                         <p className="original-headline">原文：{story.originalTitle}</p>
                       )}
                       <p className="story-summary">{story.summary}</p>
@@ -472,7 +474,7 @@ export default function Home() {
               <span>{selected.time}</span>
             </div>
             <h2>{selected.title}</h2>
-            {selected.aiEnhanced && selected.originalTitle && <p className="modal-original">原文标题：{selected.originalTitle}</p>}
+            {(selected.aiEnhanced || selected.ruleTranslated) && selected.originalTitle && <p className="modal-original">原文标题：{selected.originalTitle}</p>}
             <section><h3>发生了什么</h3><p>{selected.summary}</p></section>
             {selected.facts && (
               <section className="facts-box">
