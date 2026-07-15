@@ -1,0 +1,11 @@
+{
+  "name": "孟加拉每日头条",
+  "short_name": "每日头条",
+  "description": "孟加拉业务情报与项目机会监测",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f5f1",
+  "theme_color": "#075f45",
+  "lang": "zh-CN"
+}
