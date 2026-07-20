@@ -202,6 +202,29 @@ const sourceDirectory: Record<string, { type: string; url: string }> = {
   "Ministry of Health": { type: "政府官方", url: "https://mohfw.gov.bd/" },
 };
 
+function buildChineseBrief(story: Story) {
+  const facts = story.facts;
+  const organizations = facts?.organizations?.length ? facts.organizations.join("、") : story.source;
+  const locations = facts?.locations?.length ? facts.locations.join("、") : story.location;
+  const amounts = facts?.amounts?.length ? facts.amounts.join("、") : "";
+  const dates = facts?.dates?.length ? facts.dates.join("、") : "";
+  const chineseSummary = /[\u3400-\u9fff]/.test(story.summary || "") ? story.summary.trim() : "";
+  const parts = [
+    `本条信息围绕“${story.title}”展开。`,
+    `现有公开资料显示，事项涉及${organizations || "相关政府或行业机构"}，主要地点为${locations || "孟加拉国"}，当前处于“${facts?.projectStage || story.stage || "信息披露"}”阶段。`,
+    chineseSummary ? `已披露的核心情况是：${chineseSummary}` : "当前信息流提供了原始标题和报道摘要，具体数据、各方表态及实施安排仍应以原始报道或政府文件为准。",
+    amounts ? `报道中明确出现的金额或规模包括：${amounts}。` : "目前尚未从公开摘要中识别出可确认的金额或规模数据。",
+    dates ? `相关日期包括：${dates}。` : "",
+    `从业务与项目开发角度看，${story.impact}`,
+    `该信息目前评为“${story.confidence}”${story.confidenceScore ? `，可信度评分为${story.confidenceScore}/100` : ""}，共发现${story.sourceCount}个独立来源。建议打开下方原始链接核对全文、附件和最新变更。`,
+  ].filter(Boolean);
+  let brief = parts.join("");
+  const supplement = "本提炼仅依据已采集的公开标题、摘要和来源信息生成，不补充未经来源支持的事实，也不能替代正式尽调或法律、财务判断。";
+  if (brief.length < 200) brief += supplement;
+  if (brief.length < 200) brief += "如涉及投标、融资或合同安排，应进一步核验主管部门公告、截止日期和正式文件。";
+  return brief.length > 300 ? `${brief.slice(0, 297)}……` : brief;
+}
+
 export default function Home() {
   const [category, setCategory] = useState("全部");
   const [query, setQuery] = useState("");
@@ -258,7 +281,6 @@ export default function Home() {
       return categoryMatch && savedMatch && queryMatch;
     });
   }, [category, query, saved, showSaved, stories]);
-
   const generatedLabel = news.generatedAt
     ? new Intl.DateTimeFormat("zh-CN", {
         timeZone: "Asia/Dhaka",
@@ -483,7 +505,22 @@ export default function Home() {
             </div>
             <h2>{selected.title}</h2>
             {(selected.aiEnhanced || selected.machineTranslated || selected.ruleTranslated) && selected.originalTitle && <p className="modal-original">原文标题：{selected.originalTitle}</p>}
-            <section><h3>发生了什么</h3><p>{selected.summary}</p></section>
+            <section className="brief-box">
+              <h3>中文提炼 <small>（200–300字 · 基于公开信息自动整理）</small></h3>
+              <p>{buildChineseBrief(selected)}</p>
+              {(selected.sourceLinks?.[0]?.url || selected.url) && (
+                <a
+                  className="source-toggle"
+                  href={selected.sourceLinks?.[0]?.url || selected.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span>↗</span>
+                  打开原始报道
+                  <em>外部链接</em>
+                </a>
+              )}
+            </section>
             {selected.facts && (
               <section className="facts-box">
                 <h3>关键事实</h3>
