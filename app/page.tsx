@@ -26,6 +26,7 @@ type Story = {
   time: string;
   location: string;
   stage: string;
+  trackedProject?: string;
   tags: string[];
   url?: string;
   publishedAt?: string;
@@ -162,6 +163,7 @@ const demoStories: Story[] = [
 
 const categories = [
   "全部",
+  "重点项目",
   "时政政府",
   "政府会议",
   "招标采购",
@@ -173,10 +175,12 @@ const categories = [
 ];
 
 const projects = [
-  { name: "帕亚拉电站", count: 12, trend: "+3" },
-  { name: "达卡—阿苏利亚高架", count: 8, trend: "+1" },
-  { name: "ADB铁路项目", count: 7, trend: "+2" },
-  { name: "孟中新能源", count: 5, trend: "+1" },
+  { name: "帕亚拉电站" },
+  { name: "达卡—阿苏利亚高架" },
+  { name: "ADB铁路项目" },
+  { name: "孟中新能源" },
+  { name: "港口项目" },
+  { name: "LNG与FSRU" },
 ];
 
 const confidenceClass: Record<Confidence, string> = {
@@ -244,11 +248,11 @@ export default function Home() {
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return stories.filter((story) => {
-      const categoryMatch = category === "全部" || story.category === category;
+      const categoryMatch = category === "全部" || (category === "重点项目" ? Boolean(story.trackedProject) : story.category === category);
       const savedMatch = !showSaved || saved.includes(story.id);
       const queryMatch =
         !needle ||
-        `${story.title}${story.summary}${story.tags.join("")}`
+        `${story.title}${story.summary}${story.trackedProject || ""}${story.tags.join("")}`
           .toLowerCase()
           .includes(needle);
       return categoryMatch && savedMatch && queryMatch;
@@ -437,10 +441,9 @@ export default function Home() {
               </div>
               <div className="project-list">
                 {projects.map((project, index) => (
-                  <button key={project.name} onClick={() => setQuery(project.name.split("—")[0])}>
+                  <button key={project.name} onClick={() => { setCategory("重点项目"); setQuery(project.name); }}>
                     <span className={`project-badge c${index + 1}`}>{index + 1}</span>
-                    <span><b>{project.name}</b><small>{project.count}条相关信息</small></span>
-                    <em>{project.trend}</em>
+                    <span><b>{project.name}</b><small>{stories.filter((story) => story.trackedProject === project.name).length}条相关信息</small></span>
                   </button>
                 ))}
               </div>
