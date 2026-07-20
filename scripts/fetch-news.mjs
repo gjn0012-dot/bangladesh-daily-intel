@@ -45,10 +45,16 @@ const feeds = [
   { name: "孟加拉航运部", url: "https://mos.gov.bd/pages/news", kind: "governmentHtml", category: "港口船舶", official: true },
   { name: "孟加拉公路运输与桥梁司", url: "https://rthd.gov.bd/pages/news", kind: "governmentHtml", category: "交通基建", official: true },
   { name: "孟加拉公共采购管理局（BPPA）", url: "https://bppa.gov.bd/media-communication/news.html", kind: "governmentHtml", category: "宏观金融", official: true },
-  { name: "BPPA · 工程招标", url: webSearchFeed("site:bppa.gov.bd/advertisement-works/details Bangladesh tender"), category: "招标采购", official: true },
-  { name: "BPPA · 货物采购", url: webSearchFeed("site:bppa.gov.bd/advertisement-goods/details Bangladesh tender"), category: "招标采购", official: true },
-  { name: "BPPA · 咨询服务", url: webSearchFeed("site:bppa.gov.bd/advertisement-services/details Bangladesh EOI consultancy"), category: "招标采购", official: true },
+  { name: "BPPA · 工程招标", url: webSearchFeed("site:bppa.gov.bd/advertisement-works/details Bangladesh tender"), category: "招标采购", official: true, allowedHosts: ["bppa.gov.bd"] },
+  { name: "BPPA · 货物采购", url: webSearchFeed("site:bppa.gov.bd/advertisement-goods/details Bangladesh tender"), category: "招标采购", official: true, allowedHosts: ["bppa.gov.bd"] },
+  { name: "BPPA · 咨询服务", url: webSearchFeed("site:bppa.gov.bd/advertisement-services/details Bangladesh EOI consultancy"), category: "招标采购", official: true, allowedHosts: ["bppa.gov.bd"] },
   { name: "孟加拉央行", url: "https://www.bb.org.bd/en/index.php/mediaroom/press_release", kind: "governmentHtml", category: "宏观金融", official: true },
+  { name: "重点项目 · 达阿高速", url: googleFeed('"Dhaka-Ashulia Elevated Expressway" OR DAEEP'), category: "交通基建", trackedProject: "达卡—阿苏利亚高架" },
+  { name: "重点项目 · 帕亚拉电站", url: googleFeed('"Payra power plant" OR BCPCL OR "Payra Phase II"'), category: "电力能源", trackedProject: "帕亚拉电站" },
+  { name: "重点项目 · ADB铁路", url: googleFeed('Bangladesh ("Joydebpur-Ishwardi" OR "Bogura-Sirajganj" OR "Dohazari railway" OR ADB railway)'), category: "交通基建", trackedProject: "ADB铁路项目" },
+  { name: "重点项目 · 孟中新能源", url: googleFeed('Bangladesh (BCRECL OR "Sirajganj solar" OR "Pabna solar" OR "Bangladesh-China Renewable Energy")'), category: "电力能源", trackedProject: "孟中新能源" },
+  { name: "重点项目 · 港口", url: googleFeed('Bangladesh ("Bay Terminal" OR "Chattogram Port" OR "Mongla Port" OR "Payra Port") project'), category: "港口船舶", trackedProject: "港口项目" },
+  { name: "重点项目 · LNG与FSRU", url: googleFeed('Bangladesh (FSRU OR LNG OR Matarbari OR Kutubdia) project'), category: "电力能源", trackedProject: "LNG与FSRU" },
 ];
 
 const categoryRules = [
@@ -65,6 +71,9 @@ const categoryRules = [
 const bangladeshPattern = /bangladesh|bangladeshi|dhaka|chattogram|chittagong|gazipur|narayanganj|khulna|rajshahi|sylhet|barishal|barisal|rangpur|mymensingh|cumilla|comilla|patuakhali|payra|mongla|cox['’]?s bazar|jamuna|padma|rooppur|matarbari|bpdb|petrobangla|bida|beza|ecnec|bppa|nbr|bangladesh bank|বাংলাদেশ|ঢাকা|চট্টগ্রাম|গাজীপুর|নারায়ণগঞ্জ|খুলনা|রাজশাহী|সিলেট|বরিশাল|রংপুর|ময়মনসিংহ|কুমিল্লা|পায়রা|মোংলা/i;
 const excludedTopicPattern = /cricket|football|world cup|tournament|sports?\b|actor|actress|film\b|cinema|music|celebrity|fashion|recipe|horoscope|entertainment/i;
 const governmentAdminPattern = /recruit|vacan(?:cy|cies)|job\b|exam|result|admit card|leave\b|transfer|promotion|appointment|নিয়োগ|নিয়োগ|পরীক্ষা|ফলাফল|প্রবেশপত্র|ছুটি|বদলি|পদোন্নতি/i;
+const deniedSourcePattern = /wikipedia|facebook|youtube|instagram|pinterest|quora|reddit/i;
+const bangladeshMediaPattern = /daily star|bdnews24|banglanews24|business standard|dhaka tribune|financial express|business post|prothom alo|new age|daily sun|\bbss\b|\bunb\b/i;
+const foreignLocalPattern = /\bindia\b|\bindian\b|new delhi|kolkata|mumbai|chennai|uttar pradesh|west bengal|pakistan|nepal|sri lanka/i;
 
 const impactByCategory = {
   政府会议: "可能形成新的政策方向、项目审批或部门工作安排，建议跟踪正式会议纪要及后续决定。",
@@ -103,8 +112,30 @@ function categoryFor(text) {
   return categoryRules.find(([, pattern]) => pattern.test(text))?.[0] || "";
 }
 
-function isRelevant(text) {
-  return bangladeshPattern.test(text) && !excludedTopicPattern.test(text) && Boolean(categoryFor(text));
+function hostname(value = "") {
+  try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
+}
+
+function hostAllowed(url, feed) {
+  const host = hostname(url);
+  if (!host || deniedSourcePattern.test(host)) return false;
+  if (!feed.allowedHosts?.length) return true;
+  return feed.allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+}
+
+function relevanceScore({ title = "", summary = "", source = "", url = "" }) {
+  if (deniedSourcePattern.test(`${source} ${url}`) || excludedTopicPattern.test(title)) return -100;
+  let score = 0;
+  const titleHasBangladesh = bangladeshPattern.test(title);
+  if (titleHasBangladesh) score += 6;
+  if (bangladeshPattern.test(summary)) score += 2;
+  if (bangladeshMediaPattern.test(source)) score += 3;
+  if (foreignLocalPattern.test(title) && !titleHasBangladesh) score -= 7;
+  return score;
+}
+
+function isRelevant(item) {
+  return Boolean(item.category) && relevanceScore(item) >= 5;
 }
 
 function timeAgo(dateValue) {
@@ -202,9 +233,10 @@ async function fetchFeed(feed) {
       level: highPriority ? "重点" : "参考", time: timeAgo(publishedDate), location: "孟加拉国",
       stage: category === "招标采购" ? "招标公告" : category === "政府会议" ? "政府会议" : feed.official ? "政府发布" : "媒体报道", tags: tagsFor(`${title} ${description}`, category),
       officialSource: Boolean(feed.official),
+      trackedProject: feed.trackedProject || "",
       url, publishedAt: publishedDate?.toISOString() || "", sourceLinks: [{ name: source, url }],
     };
-  }).filter((item) => item.title && item.publishedAt && item.category && (feed.official ? !excludedTopicPattern.test(item.title) : isRelevant(`${item.title} ${item.summary}`)) && /^https?:\/\//.test(item.url));
+  }).filter((item) => item.title && item.publishedAt && item.category && hostAllowed(item.url, feed) && (feed.official ? !excludedTopicPattern.test(item.title) : isRelevant(item)) && /^https?:\/\//.test(item.url));
 }
 
 function parseGovernmentPage(feed, html) {
@@ -215,7 +247,9 @@ function parseGovernmentPage(feed, html) {
     if (title.length < 12 || title.length > 260 || governmentAdminPattern.test(title) || excludedTopicPattern.test(title)) continue;
     let url;
     try { url = new URL(decodeEntities(match[1]), feed.url).href; } catch { continue; }
-    if (!/^https?:\/\//.test(url)) continue;
+    const urlHost = hostname(url);
+    const feedHost = hostname(feed.url);
+    if (!/^https?:\/\//.test(url) || deniedSourcePattern.test(urlHost) || (urlHost !== feedHost && !urlHost.endsWith(".gov.bd"))) continue;
     const context = html.slice(Math.max(0, match.index - 240), Math.min(html.length, match.index + match[0].length + 520));
     const publishedDate = dateFromHtmlContext(context);
     if (!publishedDate) continue;
@@ -227,6 +261,7 @@ function parseGovernmentPage(feed, html) {
       impact: impactByCategory[category], source: feed.name, sourceCount: 1,
       confidence: "官方确认", level: "重点", time: timeAgo(publishedDate), location: "孟加拉国",
       stage: category === "招标采购" ? "招标公告" : category === "政府会议" ? "政府会议" : "政府发布", tags: tagsFor(title, category), officialSource: true,
+      trackedProject: feed.trackedProject || "",
       url, publishedAt: publishedDate.toISOString(), sourceLinks: [{ name: feed.name, url }],
     });
   }
@@ -249,6 +284,7 @@ function cluster(items) {
       sourceCount: sources.length,
       sourceLinks,
       officialSource: group.some((item) => item.officialSource),
+      trackedProject: group.find((item) => item.trackedProject)?.trackedProject || "",
       confidence: sources.length >= 2 && primary.confidence !== "官方确认" ? "多源证实" : primary.confidence,
     };
   });
@@ -260,7 +296,7 @@ const rawStories = results.flatMap((result) => result.status === "fulfilled" ? r
 const uniqueStories = [...new Map(rawStories.map((item) => [item.url.replace(/[#?]utm_.*/, ""), item])).values()];
 const allClusteredStories = cluster(uniqueStories);
 const priorityStories = allClusteredStories
-  .filter((item) => item.officialSource || item.category === "政府会议" || item.category === "招标采购")
+  .filter((item) => item.officialSource || item.trackedProject || item.category === "政府会议" || item.category === "招标采购")
   .slice(0, 32);
 const clusteredStories = [...new Map([...priorityStories, ...allClusteredStories].map((item) => [item.id, item])).values()]
   .slice(0, MAX_STORIES)
